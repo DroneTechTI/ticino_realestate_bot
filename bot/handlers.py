@@ -26,7 +26,8 @@ from bot.keyboards_i18n import (
     confirm_keyboard,
     cancel_keyboard,
     back_to_main_keyboard,
-    category_keyboard
+    category_keyboard,
+    get_label
 )
 from bot.keyboards import (
     city_suggestions_keyboard,

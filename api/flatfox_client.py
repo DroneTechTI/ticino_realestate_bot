@@ -61,10 +61,10 @@ class FlatfoxClient:
         # Build query parameters
         params = {}
         
-        # Always filter for Ticino canton (but we'll need to fetch ALL and filter manually)
+        # Always filter for Ticino canton (but API doesn't respect it)
         params['state'] = 'TI'
-        # Get more results to filter from (API doesn't respect filters)
-        params['limit'] = 100  # Get 100 at a time for filtering
+        # We'll fetch multiple pages to get more results
+        fetch_limit = 200  # Fetch 200 results total to filter from
         
         # NOTE: We pass filters to API but they don't work properly
         # We'll filter manually after getting results
@@ -86,15 +86,30 @@ class FlatfoxClient:
             params['object_category'] = object_category.upper()
         
         try:
-            logger.info(f"Searching properties with filters: {params}")
-            response = self.session.get(self.api_url, params=params, timeout=10)
-            response.raise_for_status()
+            # IMPORTANT: Flatfox API doesn't filter properly!
+            # We need to fetch multiple pages and filter manually
+            all_results = []
             
-            data = response.json()
+            # Fetch multiple pages to get enough data (200 results)
+            for page_offset in range(0, fetch_limit, 100):
+                params['limit'] = 100
+                params['offset'] = page_offset
+                
+                logger.info(f"Fetching page at offset {page_offset}")
+                response = self.session.get(self.api_url, params=params, timeout=10)
+                response.raise_for_status()
+                
+                data = response.json()
+                page_results = data.get('results', [])
+                all_results.extend(page_results)
+                
+                # Stop if we got less than 100 (no more results)
+                if len(page_results) < 100:
+                    break
             
-            # IMPORTANT: Flatfox API doesn't filter properly, we need to filter results manually
-            # Get all results and filter them ourselves
-            all_results = data.get('results', [])
+            logger.info(f"Fetched {len(all_results)} total results from API")
+            
+            # Filter results manually
             filtered_results = self._filter_results_manually(
                 all_results, city, min_rooms, max_rooms, max_price, 
                 min_surface, offer_type, object_category
@@ -113,7 +128,7 @@ class FlatfoxClient:
                 'results': paginated_results
             }
             
-            logger.info(f"API returned {len(all_results)}, after filtering: {len(filtered_results)} properties")
+            logger.info(f"After filtering: {len(filtered_results)} properties match criteria")
             
             return filtered_data
             
@@ -146,6 +161,11 @@ class FlatfoxClient:
         filtered = []
         
         for item in results:
+            # ALWAYS filter by Ticino canton first (API ignores it!)
+            item_state = item.get('state', '').upper()
+            if item_state != 'TI':
+                continue  # Skip non-Ticino properties
+            
             # Filter by city (case insensitive partial match)
             if city:
                 item_city = item.get('city', '').lower()
