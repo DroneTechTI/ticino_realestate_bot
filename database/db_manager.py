@@ -71,6 +71,7 @@ class DatabaseManager:
                     max_price INTEGER,
                     min_surface INTEGER,
                     offer_type TEXT,
+                    object_category TEXT,
                     is_active BOOLEAN NOT NULL DEFAULT 1,
                     created_at TIMESTAMP NOT NULL,
                     FOREIGN KEY (user_id) REFERENCES users (user_id)
@@ -193,7 +194,7 @@ class DatabaseManager:
     def add_alert(self, user_id: int, city: Optional[str] = None,
                   min_rooms: Optional[float] = None, max_rooms: Optional[float] = None,
                   max_price: Optional[int] = None, min_surface: Optional[int] = None,
-                  offer_type: Optional[str] = None) -> Optional[int]:
+                  offer_type: Optional[str] = None, object_category: Optional[str] = None) -> Optional[int]:
         """
         Add a new alert for a user
         
@@ -205,6 +206,7 @@ class DatabaseManager:
             max_price: Maximum price
             min_surface: Minimum surface area
             offer_type: 'RENT' or 'SALE'
+            object_category: Category (APARTMENT, HOUSE, PARK, INDUSTRY, SHARED)
             
         Returns:
             Alert ID if successful, None otherwise
@@ -214,10 +216,10 @@ class DatabaseManager:
                 cursor = conn.cursor()
                 cursor.execute("""
                     INSERT INTO alerts (user_id, city, min_rooms, max_rooms, max_price, 
-                                       min_surface, offer_type, is_active, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
+                                       min_surface, offer_type, object_category, is_active, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
                 """, (user_id, city, min_rooms, max_rooms, max_price, min_surface, 
-                      offer_type, datetime.now()))
+                      offer_type, object_category, datetime.now()))
                 
                 alert_id = cursor.lastrowid
                 logger.info(f"Alert {alert_id} created for user {user_id}")

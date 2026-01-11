@@ -25,7 +25,8 @@ from bot.keyboards_i18n import (
     alert_actions_keyboard,
     confirm_keyboard,
     cancel_keyboard,
-    back_to_main_keyboard
+    back_to_main_keyboard,
+    category_keyboard
 )
 from bot.keyboards import (
     city_suggestions_keyboard,
@@ -225,6 +226,8 @@ class BotHandlers:
         # Filter management
         elif data == 'filter_city':
             await self.show_city_filter(update, context)
+        elif data == 'filter_category':
+            await self.show_category_filter(update, context)
         elif data == 'filter_rooms':
             await self.show_rooms_filter(update, context)
         elif data == 'filter_price':
@@ -261,6 +264,10 @@ class BotHandlers:
         # Type filter callbacks
         elif data.startswith('set_type_'):
             await self.handle_type_selection(update, context)
+        
+        # Category filter callbacks
+        elif data.startswith('category_'):
+            await self.handle_category_selection(update, context)
         
         # Pagination
         elif data.startswith('page_'):
@@ -329,14 +336,14 @@ class BotHandlers:
         filters = context.user_data.get('filters', {})
         
         # Build filter summary
-        from services.search_service import SearchService
         summary = self.search.get_filter_summary(
             city=filters.get('city'),
             min_rooms=filters.get('min_rooms'),
             max_rooms=filters.get('max_rooms'),
             max_price=filters.get('max_price'),
             min_surface=filters.get('min_surface'),
-            offer_type=filters.get('offer_type')
+            offer_type=filters.get('offer_type'),
+            object_category=filters.get('object_category')
         )
         
         msg = get_message('filter_menu', lang) + f"\n\n{summary}"
@@ -554,6 +561,20 @@ class BotHandlers:
             reply_markup=offer_type_keyboard(lang)
         )
     
+    async def show_category_filter(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show property category filter selection"""
+        query = update.callback_query
+        user_id = update.effective_user.id
+        lang = self.get_user_lang(user_id)
+        
+        msg = get_message('filter_category_prompt', lang)
+        
+        await query.edit_message_text(
+            msg,
+            parse_mode=ParseMode.HTML,
+            reply_markup=category_keyboard(lang)
+        )
+    
     async def clear_filters(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Clear all filters"""
         query = update.callback_query
@@ -623,6 +644,7 @@ class BotHandlers:
             max_price=filters.get('max_price'),
             min_surface=filters.get('min_surface'),
             offer_type=filters.get('offer_type'),
+            object_category=filters.get('object_category'),
             page=1,
             per_page=5
         )
@@ -704,6 +726,7 @@ class BotHandlers:
             max_price=filters.get('max_price'),
             min_surface=filters.get('min_surface'),
             offer_type=filters.get('offer_type'),
+            object_category=filters.get('object_category'),
             page=new_page,
             per_page=5
         )
@@ -897,6 +920,29 @@ class BotHandlers:
         
         await self.show_filters_menu(update, context)
     
+    async def handle_category_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle property category selection"""
+        query = update.callback_query
+        user_id = update.effective_user.id
+        lang = self.get_user_lang(user_id)
+        
+        category_code = query.data.split('_', 1)[1]  # category_APARTMENT -> APARTMENT
+        
+        if 'filters' not in context.user_data:
+            context.user_data['filters'] = {}
+        
+        if category_code == 'NONE':
+            context.user_data['filters'].pop('object_category', None)
+            await query.answer("🏠 Category filter removed")
+        else:
+            context.user_data['filters']['object_category'] = category_code
+            from bot.category_keyboard import get_category_label
+            cat_label = get_category_label(category_code, lang)
+            confirm_msg = get_message('filter_category_set', lang, category=cat_label)
+            await query.answer(confirm_msg)
+        
+        await self.show_filters_menu(update, context)
+    
     # ==================== TEXT INPUT HANDLERS ====================
     
     async def handle_text_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1022,7 +1068,8 @@ class BotHandlers:
                 max_rooms=filters.get('max_rooms'),
                 max_price=filters.get('max_price'),
                 min_surface=filters.get('min_surface'),
-                offer_type=filters.get('offer_type')
+                offer_type=filters.get('offer_type'),
+                object_category=filters.get('object_category')
             )
             
             if alert_id:
@@ -1077,7 +1124,8 @@ class BotHandlers:
                     'max_rooms': alert.max_rooms,
                     'max_price': alert.max_price,
                     'min_surface': alert.min_surface,
-                    'offer_type': alert.offer_type
+                    'offer_type': alert.offer_type,
+                    'object_category': getattr(alert, 'object_category', None)
                 }
                 await query.answer("🔍 Searching...")
                 await self.execute_search(update, context, context.user_data['filters'])
