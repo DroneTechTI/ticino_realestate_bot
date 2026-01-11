@@ -148,13 +148,15 @@ class DatabaseManager:
                 row = cursor.fetchone()
                 
                 if row:
+                    # Convert Row to dict for safe access
+                    row_dict = dict(row)
                     return User(
-                        user_id=row['user_id'],
-                        username=row['username'],
-                        first_name=row['first_name'],
-                        created_at=datetime.fromisoformat(row['created_at']),
-                        is_active=bool(row['is_active']),
-                        language=row.get('language', 'it')
+                        user_id=row_dict['user_id'],
+                        username=row_dict.get('username'),
+                        first_name=row_dict['first_name'],
+                        created_at=datetime.fromisoformat(row_dict['created_at']),
+                        is_active=bool(row_dict['is_active']),
+                        language=row_dict.get('language', 'it')
                     )
                 return None
         except Exception as e:
@@ -174,17 +176,18 @@ class DatabaseManager:
                 cursor.execute("SELECT * FROM users WHERE is_active = 1")
                 rows = cursor.fetchall()
                 
-                return [
-                    User(
-                        user_id=row['user_id'],
-                        username=row['username'],
-                        first_name=row['first_name'],
-                        created_at=datetime.fromisoformat(row['created_at']),
-                        is_active=bool(row['is_active']),
-                        language=row.get('language', 'it')
-                    )
-                    for row in rows
-                ]
+                users = []
+                for row in rows:
+                    row_dict = dict(row)
+                    users.append(User(
+                        user_id=row_dict['user_id'],
+                        username=row_dict.get('username'),
+                        first_name=row_dict['first_name'],
+                        created_at=datetime.fromisoformat(row_dict['created_at']),
+                        is_active=bool(row_dict['is_active']),
+                        language=row_dict.get('language', 'it')
+                    ))
+                return users
         except Exception as e:
             logger.error(f"Error getting active users: {e}")
             return []

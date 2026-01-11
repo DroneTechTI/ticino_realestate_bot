@@ -269,9 +269,11 @@ class BotHandlers:
         elif data.startswith('category_'):
             await self.handle_category_selection(update, context)
         
-        # Pagination
+        # Pagination and property navigation
         elif data.startswith('page_'):
             await self.handle_pagination(update, context)
+        elif data.startswith('prop_'):
+            await self.handle_property_navigation(update, context)
         
         # Alert management
         elif data.startswith('alert_'):
@@ -649,12 +651,14 @@ class BotHandlers:
             per_page=5
         )
         
-        # Save search context
+        # Save search context with properties
         context.user_data['last_search'] = {
             'filters': filters.copy(),
             'current_page': 1,
             'total_pages': total_pages,
-            'total_count': total_count
+            'total_count': total_count,
+            'current_property_index': 0,
+            'properties': properties  # Store current page properties
         }
         
         if total_count == 0:
@@ -667,23 +671,11 @@ class BotHandlers:
             )
             return
         
-        # Show results header - send new message instead of editing to avoid "not modified" error
-        header = get_message('search_results_header', lang,
-                           count=total_count,
-                           page=1,
-                           total_pages=total_pages)
-        
-        # Answer callback and send new message
+        # Answer callback
         await query.answer()
-        await query.message.reply_text(
-            header,
-            parse_mode=ParseMode.HTML,
-            reply_markup=pagination_keyboard(1, total_pages, lang)
-        )
         
-        # Send property results
-        for prop in properties:
-            await self.notifier.send_property_to_user(user_id, prop)
+        # Send first property in single message with navigation
+        await self.send_property_with_navigation(query.message, user_id, context, lang)
     
     async def handle_pagination(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle pagination navigation"""
@@ -733,22 +725,11 @@ class BotHandlers:
         
         # Update search context
         context.user_data['last_search']['current_page'] = new_page
+        context.user_data['last_search']['current_property_index'] = 0
+        context.user_data['last_search']['properties'] = properties
         
-        # Update header
-        header = get_message('search_results_header', lang,
-                           count=total_count,
-                           page=new_page,
-                           total_pages=total_pages)
-        
-        await query.edit_message_text(
-            header,
-            parse_mode=ParseMode.HTML,
-            reply_markup=pagination_keyboard(new_page, total_pages, lang)
-        )
-        
-        # Send properties for this page
-        for prop in properties:
-            await self.notifier.send_property_to_user(user_id, prop)
+        # Update to first property of new page
+        await self.send_property_with_navigation(query.message, user_id, context, lang, edit_message=True)
     
     # ==================== FILTER PRESET HANDLERS ====================
     
@@ -1163,3 +1144,124 @@ class BotHandlers:
             msg = get_message('operation_cancelled', lang)
             await query.answer(msg)
             await self.show_alerts_menu(update, context)
+    
+    # ==================== PROPERTY NAVIGATION ====================
+    
+    async def send_property_with_navigation(self, message, user_id: int, context: ContextTypes.DEFAULT_TYPE, 
+                                           lang: str, edit_message: bool = False):
+        """Send property with navigation buttons in single message"""
+        last_search = context.user_data.get('last_search')
+        if not last_search:
+            return
+        
+        properties = last_search.get('properties', [])
+        if not properties:
+            return
+        
+        current_index = last_search.get('current_property_index', 0)
+        current_page = last_search.get('current_page', 1)
+        total_pages = last_search.get('total_pages', 1)
+        total_count = last_search.get('total_count', 0)
+        
+        prop = properties[current_index]
+        
+        # Format property message
+        from utils.helpers import format_property_message
+        prop_msg = format_property_message(prop, include_description=True)
+        
+        # Add navigation info
+        prop_position = (current_page - 1) * 5 + current_index + 1
+        header = f"📍 <b>Property {prop_position} of {total_count}</b> (Page {current_page}/{total_pages})\n\n"
+        full_msg = header + prop_msg
+        
+        # Build navigation keyboard
+        keyboard = []
+        nav_row = []
+        
+        # Previous property button
+        if current_index > 0:
+            nav_row.append(InlineKeyboardButton("⬅️ Previous", callback_data="prop_prev"))
+        
+        # Property counter
+        nav_row.append(InlineKeyboardButton(
+            f"📄 {current_index + 1}/{len(properties)}", 
+            callback_data="prop_info"
+        ))
+        
+        # Next property button
+        if current_index < len(properties) - 1:
+            nav_row.append(InlineKeyboardButton("Next ➡️", callback_data="prop_next"))
+        
+        keyboard.append(nav_row)
+        
+        # Page navigation row
+        page_row = []
+        if current_page > 1:
+            page_row.append(InlineKeyboardButton("⏮️ Prev Page", callback_data=f"page_prev_{current_page}"))
+        if current_page < total_pages:
+            page_row.append(InlineKeyboardButton("Next Page ⏭️", callback_data=f"page_next_{current_page}"))
+        
+        if page_row:
+            keyboard.append(page_row)
+        
+        # Action buttons
+        keyboard.append([
+            InlineKeyboardButton(get_label('new_search', lang), callback_data="menu_search"),
+            InlineKeyboardButton(get_label('main_menu', lang), callback_data="back_main")
+        ])
+        
+        from telegram import InlineKeyboardMarkup
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        # Send or edit message (without images to avoid spam)
+        try:
+            if edit_message:
+                await message.edit_text(
+                    full_msg,
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=reply_markup,
+                    disable_web_page_preview=True
+                )
+            else:
+                await message.reply_text(
+                    full_msg,
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=reply_markup,
+                    disable_web_page_preview=True
+                )
+        except Exception as e:
+            logger.error(f"Error sending property with navigation: {e}")
+    
+    async def handle_property_navigation(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle property navigation within same page"""
+        query = update.callback_query
+        user_id = update.effective_user.id
+        lang = self.get_user_lang(user_id)
+        data = query.data
+        
+        last_search = context.user_data.get('last_search')
+        if not last_search:
+            await query.answer("❌ Search expired")
+            return
+        
+        properties = last_search.get('properties', [])
+        current_index = last_search.get('current_property_index', 0)
+        
+        if data == 'prop_prev':
+            if current_index > 0:
+                context.user_data['last_search']['current_property_index'] = current_index - 1
+                await self.send_property_with_navigation(query.message, user_id, context, lang, edit_message=True)
+                await query.answer()
+            else:
+                await query.answer("⚠️ First property")
+        
+        elif data == 'prop_next':
+            if current_index < len(properties) - 1:
+                context.user_data['last_search']['current_property_index'] = current_index + 1
+                await self.send_property_with_navigation(query.message, user_id, context, lang, edit_message=True)
+                await query.answer()
+            else:
+                await query.answer("⚠️ Last property on this page")
+        
+        elif data == 'prop_info':
+            await query.answer(f"Property {current_index + 1} of {len(properties)} on this page")

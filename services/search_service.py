@@ -296,7 +296,8 @@ class SearchService:
                       max_rooms: Optional[float] = None,
                       max_price: Optional[int] = None,
                       min_surface: Optional[int] = None,
-                      offer_type: Optional[str] = None) -> bool:
+                      offer_type: Optional[str] = None,
+                      object_category: Optional[str] = None) -> bool:
         """
         Check if any filter is active
         
@@ -306,4 +307,4 @@ class SearchService:
         Returns:
             True if at least one filter is set
         """
-        return any([city, min_rooms, max_rooms, max_price, min_surface, offer_type])
+        return any([city, min_rooms, max_rooms, max_price, min_surface, offer_type, object_category])

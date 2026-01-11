@@ -7,6 +7,10 @@ This module defines all inline keyboards with multilingual support.
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from typing import Optional, List
 
+def get_label(key: str, lang: str = 'it') -> str:
+    """Get button label in specified language - forward declaration"""
+    pass
+
 # Button labels in different languages
 BUTTON_LABELS = {
     # Main menu
