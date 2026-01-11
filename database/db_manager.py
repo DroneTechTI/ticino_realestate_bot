@@ -441,3 +441,44 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Error getting user stats: {e}")
             return {'active_alerts': 0, 'properties_received': 0}
+    
+    def set_user_language(self, user_id: int, language: str) -> bool:
+        """
+        Set user's preferred language
+        
+        Args:
+            user_id: Telegram user ID
+            language: Language code (it, de, en)
+            
+        Returns:
+            True if successful
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE users 
+                    SET language = ? 
+                    WHERE user_id = ?
+                """, (language, user_id))
+                
+                success = cursor.rowcount > 0
+                if success:
+                    logger.info(f"Language set to {language} for user {user_id}")
+                return success
+        except Exception as e:
+            logger.error(f"Error setting language for user {user_id}: {e}")
+            return False
+    
+    def get_user_language(self, user_id: int) -> str:
+        """
+        Get user's preferred language
+        
+        Args:
+            user_id: Telegram user ID
+            
+        Returns:
+            Language code (it, de, en) or 'it' as default
+        """
+        user = self.get_user(user_id)
+        return user.language if user else 'it'
