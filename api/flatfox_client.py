@@ -38,6 +38,7 @@ class FlatfoxClient:
                          max_price: Optional[int] = None,
                          min_surface: Optional[int] = None,
                          offer_type: Optional[str] = None,
+                         object_category: Optional[str] = None,
                          limit: int = 20,
                          offset: int = 0) -> Dict[str, Any]:
         """
@@ -50,6 +51,7 @@ class FlatfoxClient:
             max_price: Maximum price
             min_surface: Minimum living space in m²
             offer_type: 'RENT' or 'SALE'
+            object_category: Category (APARTMENT, HOUSE, PARK, INDUSTRY, SHARED)
             limit: Number of results per page
             offset: Pagination offset
             
@@ -79,6 +81,9 @@ class FlatfoxClient:
         
         if offer_type:
             params['offer_type'] = offer_type.upper()
+        
+        if object_category:
+            params['object_category'] = object_category.upper()
         
         params['limit'] = limit
         params['offset'] = offset
@@ -183,6 +188,7 @@ class FlatfoxClient:
                         max_price: Optional[int] = None,
                         min_surface: Optional[int] = None,
                         offer_type: Optional[str] = None,
+                        object_category: Optional[str] = None,
                         limit: int = 20,
                         offset: int = 0) -> tuple[int, List[Property]]:
         """
@@ -201,6 +207,7 @@ class FlatfoxClient:
             max_price=max_price,
             min_surface=min_surface,
             offer_type=offer_type,
+            object_category=object_category,
             limit=limit,
             offset=offset
         )
@@ -251,6 +258,7 @@ class FlatfoxClient:
                             max_price: Optional[int] = None,
                             min_surface: Optional[int] = None,
                             offer_type: Optional[str] = None,
+                            object_category: Optional[str] = None,
                             limit: int = 50) -> List[Property]:
         """
         Check for new properties matching criteria (for notifications)
@@ -269,6 +277,7 @@ class FlatfoxClient:
             max_price=max_price,
             min_surface=min_surface,
             offer_type=offer_type,
+            object_category=object_category,
             limit=limit,
             offset=0
         )

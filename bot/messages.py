@@ -277,6 +277,18 @@ MESSAGES = {
         'en': "✅ Type set: <b>Sale</b>"
     },
     
+    'filter_category_prompt': {
+        'it': "🏠 <b>Categoria Immobile</b>\n\nChe tipo di immobile cerchi?",
+        'de': "🏠 <b>Immobilienkategorie</b>\n\nWelche Art von Immobilie suchen Sie?",
+        'en': "🏠 <b>Property Category</b>\n\nWhat type of property are you looking for?"
+    },
+    
+    'filter_category_set': {
+        'it': "✅ Categoria impostata: <b>{category}</b>",
+        'de': "✅ Kategorie festgelegt: <b>{category}</b>",
+        'en': "✅ Category set: <b>{category}</b>"
+    },
+    
     'filters_cleared': {
         'it': "🗑️ Tutti i filtri sono stati rimossi!",
         'de': "🗑️ Alle Filter wurden entfernt!",

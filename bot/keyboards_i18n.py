@@ -84,6 +84,11 @@ BUTTON_LABELS = {
         'de': '🏷️ Typ (Miete/Kauf)',
         'en': '🏷️ Type (Rent/Sale)'
     },
+    'set_category': {
+        'it': '🏠 Categoria Immobile',
+        'de': '🏠 Immobilienkategorie',
+        'en': '🏠 Property Category'
+    },
     'clear_filters': {
         'it': '🗑️ Cancella Tutti',
         'de': '🗑️ Alle löschen',
@@ -266,6 +271,7 @@ def filter_menu_keyboard(lang: str = 'it') -> InlineKeyboardMarkup:
     """Filter management menu keyboard"""
     keyboard = [
         [InlineKeyboardButton(get_label('set_city', lang), callback_data="filter_city")],
+        [InlineKeyboardButton(get_label('set_category', lang), callback_data="filter_category")],
         [InlineKeyboardButton(get_label('set_rooms', lang), callback_data="filter_rooms")],
         [InlineKeyboardButton(get_label('set_max_price', lang), callback_data="filter_price")],
         [InlineKeyboardButton(get_label('set_min_surface', lang), callback_data="filter_surface")],
@@ -379,3 +385,6 @@ from .keyboards import (
     price_presets_keyboard,
     surface_presets_keyboard
 )
+
+# Import category keyboard
+from .category_keyboard import category_keyboard
