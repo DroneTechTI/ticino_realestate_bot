@@ -94,19 +94,52 @@ class FlatfoxClient:
             params['object_category'] = flatfox_category
         
         try:
-            # With correct API syntax, we can let API do most filtering
-            # Just fetch one page at a time
-            params['limit'] = limit
-            params['offset'] = offset
+            # Even with correct syntax, Flatfox API is broken and returns everything
+            # We MUST filter manually client-side
+            all_results = []
             
-            logger.info(f"API request with params: {params}")
-            response = self.session.get(self.api_url, params=params, timeout=10)
-            response.raise_for_status()
+            # Fetch multiple pages (500 results total for better coverage)
+            for page_offset in range(0, 500, 100):
+                page_params = params.copy()
+                page_params['limit'] = 100
+                page_params['offset'] = page_offset
+                
+                logger.info(f"Fetching page at offset {page_offset}")
+                response = self.session.get(self.api_url, params=page_params, timeout=10)
+                response.raise_for_status()
+                
+                data = response.json()
+                page_results = data.get('results', [])
+                all_results.extend(page_results)
+                
+                # Stop if we got less than 100 (no more results)
+                if len(page_results) < 100:
+                    break
             
-            data = response.json()
-            logger.info(f"API returned count: {data.get('count', 0)}, results: {len(data.get('results', []))}")
+            logger.info(f"Fetched {len(all_results)} total results from API")
             
-            return data
+            # Filter results manually since API is broken
+            filtered_results = self._filter_results_manually(
+                all_results, city, min_rooms, max_rooms, max_price, 
+                min_surface, offer_type, object_category
+            )
+            
+            # Apply pagination on filtered results
+            start_idx = offset
+            end_idx = offset + limit
+            paginated_results = filtered_results[start_idx:end_idx]
+            
+            # Return modified data with correct count
+            filtered_data = {
+                'count': len(filtered_results),
+                'next': None if end_idx >= len(filtered_results) else 'has_more',
+                'previous': None if offset == 0 else 'has_prev',
+                'results': paginated_results
+            }
+            
+            logger.info(f"After manual filtering: {len(filtered_results)} properties match criteria")
+            
+            return filtered_data
             
         except requests.exceptions.Timeout:
             logger.error("Request to Flatfox API timed out")
@@ -184,10 +217,18 @@ class FlatfoxClient:
                 if item_type != offer_type.upper():
                     continue
             
-            # Filter by category
+            # Filter by category (map our names to Flatfox codes)
             if object_category:
+                category_map = {
+                    'APARTMENT': 'APPT',
+                    'HOUSE': 'HOUSE',
+                    'PARK': 'PARK',
+                    'INDUSTRY': 'INDUS',
+                    'SHARED': 'SHARED'
+                }
+                expected_category = category_map.get(object_category.upper(), object_category.upper())
                 item_category = item.get('object_category', '').upper()
-                if item_category != object_category.upper():
+                if item_category != expected_category:
                     continue
             
             # If we got here, item passes all filters
