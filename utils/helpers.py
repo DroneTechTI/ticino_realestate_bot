@@ -52,8 +52,10 @@ def format_property_message(prop: Property, include_description: bool = True) ->
     
     # Title with type
     object_type_text = prop.object_type or "Property"
-    if prop.number_of_rooms:
-        title = f"{type_emoji} {object_type_text} - {prop.get_rooms_formatted()}"
+    rooms_text = prop.get_rooms_formatted()
+    
+    if prop.number_of_rooms is not None and rooms_text != "Not specified":
+        title = f"{type_emoji} {object_type_text} - {rooms_text}"
     else:
         title = f"{type_emoji} {object_type_text}"
     lines.append(f"<b>{title}</b>")
@@ -66,8 +68,9 @@ def format_property_message(prop: Property, include_description: bool = True) ->
     lines.append(f"💰 <b>Price:</b> {prop.get_price_formatted()}")
     
     # Surface
-    if prop.livingspace:
-        lines.append(f"📐 <b>Surface:</b> {prop.get_surface_formatted()}")
+    surface_text = prop.get_surface_formatted()
+    if prop.livingspace is not None and surface_text != "Not specified":
+        lines.append(f"📐 <b>Surface:</b> {surface_text}")
     
     # Availability
     if prop.availability_date:
@@ -218,8 +221,9 @@ def format_property_caption(prop: Property) -> str:
     lines = []
     
     # Title
-    if prop.number_of_rooms:
-        lines.append(f"<b>{prop.get_rooms_formatted()}</b>")
+    rooms_text = prop.get_rooms_formatted()
+    if prop.number_of_rooms is not None and rooms_text != "Not specified":
+        lines.append(f"<b>{rooms_text}</b>")
     
     # Location
     lines.append(f"📍 {prop.get_full_address()}")
@@ -228,8 +232,9 @@ def format_property_caption(prop: Property) -> str:
     lines.append(f"💰 {prop.get_price_formatted()}")
     
     # Surface
-    if prop.livingspace:
-        lines.append(f"📐 {prop.get_surface_formatted()}")
+    surface_text = prop.get_surface_formatted()
+    if prop.livingspace is not None and surface_text != "Not specified":
+        lines.append(f"📐 {surface_text}")
     
     return "\n".join(lines)
 

@@ -95,17 +95,23 @@ class Property:
     
     def get_rooms_formatted(self) -> str:
         """Returns formatted rooms string"""
-        if not self.number_of_rooms:
+        if self.number_of_rooms is None:
             return "Not specified"
         
-        # Format with .5 for half rooms
-        if self.number_of_rooms % 1 == 0:
-            return f"{int(self.number_of_rooms)} rooms"
-        else:
-            return f"{self.number_of_rooms} rooms"
+        try:
+            # Format with .5 for half rooms
+            if float(self.number_of_rooms) % 1 == 0:
+                return f"{int(self.number_of_rooms)} rooms"
+            else:
+                return f"{self.number_of_rooms} rooms"
+        except (TypeError, ValueError):
+            return "Not specified"
     
     def get_surface_formatted(self) -> str:
         """Returns formatted surface area string"""
-        if not self.livingspace:
+        if self.livingspace is None:
             return "Not specified"
-        return f"{int(self.livingspace)} m²"
+        try:
+            return f"{int(self.livingspace)} m²"
+        except (TypeError, ValueError):
+            return "Not specified"
