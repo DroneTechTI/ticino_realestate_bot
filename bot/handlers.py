@@ -238,7 +238,50 @@ class BotHandlers:
         elif data == 'filter_search':
             await self.search_with_filters(update, context)
         
-        # Additional routing will be added in Part 2
+        # Search type selection
+        elif data.startswith('search_type_'):
+            await self.handle_search_type(update, context)
+        
+        # City filter callbacks
+        elif data.startswith('city_'):
+            await self.handle_city_selection(update, context)
+        
+        # Rooms filter callbacks
+        elif data.startswith('rooms_'):
+            await self.handle_rooms_selection(update, context)
+        
+        # Price filter callbacks
+        elif data.startswith('price_'):
+            await self.handle_price_selection(update, context)
+        
+        # Surface filter callbacks
+        elif data.startswith('surface_'):
+            await self.handle_surface_selection(update, context)
+        
+        # Type filter callbacks
+        elif data.startswith('set_type_'):
+            await self.handle_type_selection(update, context)
+        
+        # Pagination
+        elif data.startswith('page_'):
+            await self.handle_pagination(update, context)
+        
+        # Alert management
+        elif data.startswith('alert_'):
+            await self.handle_alert_action(update, context)
+        
+        # Confirmation dialogs
+        elif data.startswith('confirm_') or data.startswith('cancel_'):
+            await self.handle_confirmation(update, context)
+        
+        # Cancel input
+        elif data == 'cancel_input':
+            await self.cancel_input(update, context)
+        
+        # Navigation
+        elif data == 'back_filters':
+            await self.show_filters_menu(update, context)
+        
         else:
             lang = self.get_user_lang(user_id)
             await query.edit_message_text(
@@ -539,6 +582,534 @@ class BotHandlers:
             await query.answer("⚠️ Please set at least one filter first!")
             return
         
-        # This will be implemented in Part 2
-        await query.answer("🔍 Searching...")
-        # TODO: Implement actual search
+        # Execute search
+        await self.execute_search(update, context, filters)
+    
+    # ==================== SEARCH EXECUTION ====================
+    
+    async def handle_search_type(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle search type selection (RENT/SALE/ALL)"""
+        query = update.callback_query
+        user_id = update.effective_user.id
+        lang = self.get_user_lang(user_id)
+        
+        # Extract search type from callback data
+        search_type = query.data.split('_')[-1]  # search_type_RENT -> RENT
+        
+        # Initialize filters if not exists
+        if 'filters' not in context.user_data:
+            context.user_data['filters'] = {}
+        
+        # Set offer type filter
+        if search_type != 'ALL':
+            context.user_data['filters']['offer_type'] = search_type
+        
+        await query.answer(f"🔍 Searching...")
+        
+        # Execute search with just the type filter
+        await self.execute_search(update, context, context.user_data['filters'])
+    
+    async def execute_search(self, update: Update, context: ContextTypes.DEFAULT_TYPE, filters: dict):
+        """Execute property search and display results"""
+        query = update.callback_query
+        user_id = update.effective_user.id
+        lang = self.get_user_lang(user_id)
+        
+        # Perform search (page 1)
+        total_count, properties, total_pages = self.search.search_properties(
+            city=filters.get('city'),
+            min_rooms=filters.get('min_rooms'),
+            max_rooms=filters.get('max_rooms'),
+            max_price=filters.get('max_price'),
+            min_surface=filters.get('min_surface'),
+            offer_type=filters.get('offer_type'),
+            page=1,
+            per_page=5
+        )
+        
+        # Save search context
+        context.user_data['last_search'] = {
+            'filters': filters.copy(),
+            'current_page': 1,
+            'total_pages': total_pages,
+            'total_count': total_count
+        }
+        
+        if total_count == 0:
+            # No results
+            msg = get_message('no_results', lang)
+            await query.edit_message_text(
+                msg,
+                parse_mode=ParseMode.HTML,
+                reply_markup=back_to_main_keyboard(lang)
+            )
+            return
+        
+        # Show results header
+        header = get_message('search_results_header', lang,
+                           count=total_count,
+                           page=1,
+                           total_pages=total_pages)
+        
+        await query.edit_message_text(
+            header,
+            parse_mode=ParseMode.HTML,
+            reply_markup=pagination_keyboard(1, total_pages, lang)
+        )
+        
+        # Send property results
+        for prop in properties:
+            await self.notifier.send_property_to_user(user_id, prop)
+    
+    async def handle_pagination(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle pagination navigation"""
+        query = update.callback_query
+        user_id = update.effective_user.id
+        lang = self.get_user_lang(user_id)
+        
+        # Parse callback data: page_prev_2 or page_next_1
+        parts = query.data.split('_')
+        action = parts[1]  # prev or next
+        current_page = int(parts[2])
+        
+        # Calculate new page
+        if action == 'prev':
+            new_page = current_page - 1
+        else:  # next
+            new_page = current_page + 1
+        
+        # Get search context
+        last_search = context.user_data.get('last_search')
+        if not last_search:
+            await query.answer("❌ Search expired, please start a new search")
+            return
+        
+        filters = last_search['filters']
+        total_pages = last_search['total_pages']
+        
+        # Validate page number
+        if new_page < 1 or new_page > total_pages:
+            await query.answer("❌ Invalid page")
+            return
+        
+        await query.answer(f"📄 Loading page {new_page}...")
+        
+        # Perform search for new page
+        total_count, properties, _ = self.search.search_properties(
+            city=filters.get('city'),
+            min_rooms=filters.get('min_rooms'),
+            max_rooms=filters.get('max_rooms'),
+            max_price=filters.get('max_price'),
+            min_surface=filters.get('min_surface'),
+            offer_type=filters.get('offer_type'),
+            page=new_page,
+            per_page=5
+        )
+        
+        # Update search context
+        context.user_data['last_search']['current_page'] = new_page
+        
+        # Update header
+        header = get_message('search_results_header', lang,
+                           count=total_count,
+                           page=new_page,
+                           total_pages=total_pages)
+        
+        await query.edit_message_text(
+            header,
+            parse_mode=ParseMode.HTML,
+            reply_markup=pagination_keyboard(new_page, total_pages, lang)
+        )
+        
+        # Send properties for this page
+        for prop in properties:
+            await self.notifier.send_property_to_user(user_id, prop)
+    
+    # ==================== FILTER PRESET HANDLERS ====================
+    
+    async def handle_city_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle city selection from presets"""
+        query = update.callback_query
+        user_id = update.effective_user.id
+        lang = self.get_user_lang(user_id)
+        
+        city_code = query.data.split('_', 1)[1]  # city_Lugano -> Lugano
+        
+        if 'filters' not in context.user_data:
+            context.user_data['filters'] = {}
+        
+        if city_code == 'NONE':
+            # Remove city filter
+            context.user_data['filters'].pop('city', None)
+            await query.answer("📍 City filter removed")
+        elif city_code == 'custom':
+            # Ask for custom input
+            msg = get_message('filter_city_input', lang)
+            await query.edit_message_text(
+                msg,
+                parse_mode=ParseMode.HTML,
+                reply_markup=cancel_keyboard(lang)
+            )
+            context.user_data['waiting_for'] = 'city'
+            return
+        else:
+            # Set city
+            context.user_data['filters']['city'] = city_code
+            confirm_msg = get_message('filter_city_set', lang, city=city_code)
+            await query.answer(confirm_msg)
+        
+        # Return to filters menu
+        await self.show_filters_menu(update, context)
+    
+    async def handle_rooms_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle rooms selection from presets"""
+        query = update.callback_query
+        user_id = update.effective_user.id
+        lang = self.get_user_lang(user_id)
+        
+        rooms_code = query.data.split('_', 1)[1]  # rooms_1_2 -> 1_2
+        
+        if 'filters' not in context.user_data:
+            context.user_data['filters'] = {}
+        
+        if rooms_code == 'NONE':
+            # Remove rooms filter
+            context.user_data['filters'].pop('min_rooms', None)
+            context.user_data['filters'].pop('max_rooms', None)
+            await query.answer("🛏️ Rooms filter removed")
+        elif rooms_code == 'custom':
+            # Ask for custom input
+            msg = get_message('filter_rooms_input', lang)
+            await query.edit_message_text(
+                msg,
+                parse_mode=ParseMode.HTML,
+                reply_markup=cancel_keyboard(lang)
+            )
+            context.user_data['waiting_for'] = 'rooms_min'
+            return
+        else:
+            # Parse range: 1_2, 3_4, etc.
+            parts = rooms_code.split('_')
+            min_rooms = float(parts[0])
+            max_rooms = float(parts[1]) if len(parts) > 1 else None
+            
+            context.user_data['filters']['min_rooms'] = min_rooms
+            if max_rooms and max_rooms < 99:
+                context.user_data['filters']['max_rooms'] = max_rooms
+            else:
+                context.user_data['filters'].pop('max_rooms', None)
+            
+            confirm_msg = get_message('filter_rooms_set', lang, 
+                                     min=min_rooms, 
+                                     max=max_rooms if max_rooms and max_rooms < 99 else '∞')
+            await query.answer(confirm_msg)
+        
+        await self.show_filters_menu(update, context)
+    
+    async def handle_price_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle price selection from presets"""
+        query = update.callback_query
+        user_id = update.effective_user.id
+        lang = self.get_user_lang(user_id)
+        
+        price_code = query.data.split('_', 1)[1]  # price_2000 -> 2000
+        
+        if 'filters' not in context.user_data:
+            context.user_data['filters'] = {}
+        
+        if price_code == 'NONE':
+            context.user_data['filters'].pop('max_price', None)
+            await query.answer("💰 Price filter removed")
+        elif price_code == 'custom':
+            msg = get_message('filter_price_input', lang)
+            await query.edit_message_text(
+                msg,
+                parse_mode=ParseMode.HTML,
+                reply_markup=cancel_keyboard(lang)
+            )
+            context.user_data['waiting_for'] = 'price'
+            return
+        else:
+            price = int(price_code)
+            context.user_data['filters']['max_price'] = price
+            from utils.helpers import format_number_with_apostrophe
+            confirm_msg = get_message('filter_price_set', lang, 
+                                     price=format_number_with_apostrophe(price))
+            await query.answer(confirm_msg)
+        
+        await self.show_filters_menu(update, context)
+    
+    async def handle_surface_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle surface selection from presets"""
+        query = update.callback_query
+        user_id = update.effective_user.id
+        lang = self.get_user_lang(user_id)
+        
+        surface_code = query.data.split('_', 1)[1]  # surface_50 -> 50
+        
+        if 'filters' not in context.user_data:
+            context.user_data['filters'] = {}
+        
+        if surface_code == 'NONE':
+            context.user_data['filters'].pop('min_surface', None)
+            await query.answer("📐 Surface filter removed")
+        elif surface_code == 'custom':
+            msg = get_message('filter_surface_input', lang)
+            await query.edit_message_text(
+                msg,
+                parse_mode=ParseMode.HTML,
+                reply_markup=cancel_keyboard(lang)
+            )
+            context.user_data['waiting_for'] = 'surface'
+            return
+        else:
+            surface = int(surface_code)
+            context.user_data['filters']['min_surface'] = surface
+            confirm_msg = get_message('filter_surface_set', lang, surface=surface)
+            await query.answer(confirm_msg)
+        
+        await self.show_filters_menu(update, context)
+    
+    async def handle_type_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle offer type selection"""
+        query = update.callback_query
+        user_id = update.effective_user.id
+        lang = self.get_user_lang(user_id)
+        
+        type_code = query.data.split('_', 2)[2]  # set_type_RENT -> RENT
+        
+        if 'filters' not in context.user_data:
+            context.user_data['filters'] = {}
+        
+        if type_code == 'NONE':
+            context.user_data['filters'].pop('offer_type', None)
+            await query.answer("🏷️ Type filter removed")
+        elif type_code == 'RENT':
+            context.user_data['filters']['offer_type'] = 'RENT'
+            confirm_msg = get_message('filter_type_set_rent', lang)
+            await query.answer(confirm_msg)
+        elif type_code == 'SALE':
+            context.user_data['filters']['offer_type'] = 'SALE'
+            confirm_msg = get_message('filter_type_set_sale', lang)
+            await query.answer(confirm_msg)
+        
+        await self.show_filters_menu(update, context)
+    
+    # ==================== TEXT INPUT HANDLERS ====================
+    
+    async def handle_text_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle text input from user for custom filter values"""
+        user_id = update.effective_user.id
+        lang = self.get_user_lang(user_id)
+        text = update.message.text.strip()
+        
+        waiting_for = context.user_data.get('waiting_for')
+        
+        if not waiting_for:
+            return  # Not waiting for input
+        
+        if 'filters' not in context.user_data:
+            context.user_data['filters'] = {}
+        
+        # Process based on what we're waiting for
+        if waiting_for == 'city':
+            context.user_data['filters']['city'] = text
+            msg = get_message('filter_city_set', lang, city=text)
+            await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
+        
+        elif waiting_for == 'rooms_min':
+            rooms = validate_room_number(text)
+            if rooms:
+                context.user_data['filters']['min_rooms'] = rooms
+                context.user_data['waiting_for'] = 'rooms_max'
+                msg = f"✅ Min rooms: {rooms}\n\nNow enter max rooms (or type 'skip'):"
+                await update.message.reply_text(msg)
+                return
+            else:
+                msg = get_message('error_invalid_input', lang)
+                await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
+                return
+        
+        elif waiting_for == 'rooms_max':
+            if text.lower() == 'skip':
+                context.user_data['filters'].pop('max_rooms', None)
+            else:
+                rooms = validate_room_number(text)
+                if rooms:
+                    context.user_data['filters']['max_rooms'] = rooms
+                else:
+                    msg = get_message('error_invalid_input', lang)
+                    await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
+                    return
+            
+            min_r = context.user_data['filters'].get('min_rooms', 0)
+            max_r = context.user_data['filters'].get('max_rooms', '∞')
+            msg = get_message('filter_rooms_set', lang, min=min_r, max=max_r)
+            await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
+        
+        elif waiting_for == 'price':
+            price = validate_price(text)
+            if price:
+                context.user_data['filters']['max_price'] = price
+                from utils.helpers import format_number_with_apostrophe
+                msg = get_message('filter_price_set', lang, 
+                                 price=format_number_with_apostrophe(price))
+                await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
+            else:
+                msg = get_message('error_invalid_input', lang)
+                await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
+                return
+        
+        elif waiting_for == 'surface':
+            surface = validate_surface(text)
+            if surface:
+                context.user_data['filters']['min_surface'] = surface
+                msg = get_message('filter_surface_set', lang, surface=surface)
+                await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
+            else:
+                msg = get_message('error_invalid_input', lang)
+                await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
+                return
+        
+        # Clear waiting state
+        context.user_data.pop('waiting_for', None)
+        
+        # Show filters menu
+        filter_msg = get_message('filter_menu', lang)
+        await update.message.reply_text(
+            filter_msg,
+            parse_mode=ParseMode.HTML,
+            reply_markup=filter_menu_keyboard(lang)
+        )
+    
+    async def cancel_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Cancel text input operation"""
+        query = update.callback_query
+        user_id = update.effective_user.id
+        lang = self.get_user_lang(user_id)
+        
+        context.user_data.pop('waiting_for', None)
+        
+        msg = get_message('operation_cancelled', lang)
+        await query.answer(msg)
+        await self.show_filters_menu(update, context)
+    
+    # ==================== ALERT HANDLERS ====================
+    
+    async def handle_alert_action(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle alert-related actions"""
+        query = update.callback_query
+        user_id = update.effective_user.id
+        lang = self.get_user_lang(user_id)
+        data = query.data
+        
+        if data == 'alert_create':
+            # Create alert from current filters
+            filters = context.user_data.get('filters', {})
+            
+            if not self.search.has_any_filter(**filters):
+                await query.answer("⚠️ Please set filters first!")
+                await self.show_filters_menu(update, context)
+                return
+            
+            # Create alert
+            alert_id = self.db.add_alert(
+                user_id=user_id,
+                city=filters.get('city'),
+                min_rooms=filters.get('min_rooms'),
+                max_rooms=filters.get('max_rooms'),
+                max_price=filters.get('max_price'),
+                min_surface=filters.get('min_surface'),
+                offer_type=filters.get('offer_type')
+            )
+            
+            if alert_id:
+                msg = get_message('alert_created', lang)
+                await query.edit_message_text(
+                    msg,
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=back_to_main_keyboard(lang)
+                )
+            else:
+                msg = get_message('error_generic', lang)
+                await query.edit_message_text(msg, parse_mode=ParseMode.HTML)
+        
+        elif data.startswith('alert_view_'):
+            # View alert details
+            alert_id = int(data.split('_')[2])
+            alerts = self.db.get_user_alerts(user_id, active_only=False)
+            alert = next((a for a in alerts if a.alert_id == alert_id), None)
+            
+            if alert:
+                from utils.helpers import format_alert_summary
+                summary = format_alert_summary(alert)
+                msg = f"🔔 <b>Alert #{alert_id}</b>\n\n{summary}"
+                
+                await query.edit_message_text(
+                    msg,
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=alert_actions_keyboard(alert_id, alert.is_active, lang)
+                )
+        
+        elif data.startswith('alert_toggle_'):
+            # Toggle alert active status
+            alert_id = int(data.split('_')[2])
+            success = self.db.toggle_alert(alert_id, user_id)
+            
+            if success:
+                msg = get_message('alert_toggled', lang)
+                await query.answer(msg)
+                await self.show_alerts_menu(update, context)
+        
+        elif data.startswith('alert_search_'):
+            # Search with alert filters
+            alert_id = int(data.split('_')[2])
+            alerts = self.db.get_user_alerts(user_id, active_only=False)
+            alert = next((a for a in alerts if a.alert_id == alert_id), None)
+            
+            if alert:
+                # Load alert filters into context
+                context.user_data['filters'] = {
+                    'city': alert.city,
+                    'min_rooms': alert.min_rooms,
+                    'max_rooms': alert.max_rooms,
+                    'max_price': alert.max_price,
+                    'min_surface': alert.min_surface,
+                    'offer_type': alert.offer_type
+                }
+                await query.answer("🔍 Searching...")
+                await self.execute_search(update, context, context.user_data['filters'])
+        
+        elif data.startswith('alert_delete_confirm_'):
+            # Show delete confirmation
+            alert_id = int(data.split('_')[3])
+            msg = get_message('confirm_delete_alert', lang)
+            
+            await query.edit_message_text(
+                msg,
+                parse_mode=ParseMode.HTML,
+                reply_markup=confirm_keyboard('delete_alert', alert_id, lang)
+            )
+    
+    async def handle_confirmation(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle confirmation dialogs"""
+        query = update.callback_query
+        user_id = update.effective_user.id
+        lang = self.get_user_lang(user_id)
+        data = query.data
+        
+        if data.startswith('confirm_delete_alert_'):
+            # Confirmed delete
+            alert_id = int(data.split('_')[3])
+            success = self.db.delete_alert(alert_id, user_id)
+            
+            if success:
+                msg = get_message('alert_deleted', lang)
+                await query.answer(msg)
+                await self.show_alerts_menu(update, context)
+        
+        elif data.startswith('cancel_delete_alert_'):
+            # Cancelled delete
+            msg = get_message('operation_cancelled', lang)
+            await query.answer(msg)
+            await self.show_alerts_menu(update, context)
