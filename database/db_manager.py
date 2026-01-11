@@ -252,8 +252,9 @@ class DatabaseManager:
                 cursor.execute(query, params)
                 rows = cursor.fetchall()
                 
-                return [
-                    Alert(
+                alerts = []
+                for row in rows:
+                    alert = Alert(
                         alert_id=row['alert_id'],
                         user_id=row['user_id'],
                         city=row['city'],
@@ -265,8 +266,11 @@ class DatabaseManager:
                         is_active=bool(row['is_active']),
                         created_at=datetime.fromisoformat(row['created_at'])
                     )
-                    for row in rows
-                ]
+                    # Add object_category if exists in database
+                    if 'object_category' in row.keys():
+                        alert.object_category = row['object_category']
+                    alerts.append(alert)
+                return alerts
         except Exception as e:
             logger.error(f"Error getting alerts for user {user_id}: {e}")
             return []

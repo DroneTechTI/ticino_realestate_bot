@@ -33,6 +33,7 @@ class Alert:
     offer_type: Optional[str]  # 'RENT' or 'SALE'
     is_active: bool
     created_at: datetime
+    object_category: Optional[str] = None  # 'APARTMENT', 'HOUSE', 'PARK', 'INDUSTRY', 'SHARED'
 
 
 @dataclass
