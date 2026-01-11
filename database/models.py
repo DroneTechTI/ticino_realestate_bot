@@ -17,6 +17,7 @@ class User:
     first_name: str
     created_at: datetime
     is_active: bool = True
+    language: str = 'it'  # User's preferred language (it, de, en)
 
 
 @dataclass

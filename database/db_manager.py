@@ -55,7 +55,8 @@ class DatabaseManager:
                     username TEXT,
                     first_name TEXT NOT NULL,
                     created_at TIMESTAMP NOT NULL,
-                    is_active BOOLEAN NOT NULL DEFAULT 1
+                    is_active BOOLEAN NOT NULL DEFAULT 1,
+                    language TEXT NOT NULL DEFAULT 'it'
                 )
             """)
             
@@ -103,7 +104,7 @@ class DatabaseManager:
     
     # ==================== USER OPERATIONS ====================
     
-    def add_user(self, user_id: int, username: Optional[str], first_name: str) -> bool:
+    def add_user(self, user_id: int, username: Optional[str], first_name: str, language: str = 'it') -> bool:
         """
         Add a new user or update existing user
         
@@ -111,6 +112,7 @@ class DatabaseManager:
             user_id: Telegram user ID
             username: Telegram username
             first_name: User's first name
+            language: User's preferred language
             
         Returns:
             True if successful
@@ -119,9 +121,9 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
-                    INSERT OR REPLACE INTO users (user_id, username, first_name, created_at, is_active)
-                    VALUES (?, ?, ?, ?, 1)
-                """, (user_id, username, first_name, datetime.now()))
+                    INSERT OR REPLACE INTO users (user_id, username, first_name, created_at, is_active, language)
+                    VALUES (?, ?, ?, ?, 1, ?)
+                """, (user_id, username, first_name, datetime.now(), language))
                 logger.info(f"User {user_id} added/updated successfully")
                 return True
         except Exception as e:
@@ -150,7 +152,8 @@ class DatabaseManager:
                         username=row['username'],
                         first_name=row['first_name'],
                         created_at=datetime.fromisoformat(row['created_at']),
-                        is_active=bool(row['is_active'])
+                        is_active=bool(row['is_active']),
+                        language=row.get('language', 'it')
                     )
                 return None
         except Exception as e:
@@ -176,7 +179,8 @@ class DatabaseManager:
                         username=row['username'],
                         first_name=row['first_name'],
                         created_at=datetime.fromisoformat(row['created_at']),
-                        is_active=bool(row['is_active'])
+                        is_active=bool(row['is_active']),
+                        language=row.get('language', 'it')
                     )
                     for row in rows
                 ]
