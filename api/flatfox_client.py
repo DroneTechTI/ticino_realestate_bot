@@ -61,32 +61,29 @@ class FlatfoxClient:
         # Build query parameters
         params = {}
         
-        # Always filter for Ticino canton
+        # Always filter for Ticino canton (but we'll need to fetch ALL and filter manually)
         params['state'] = 'TI'
+        # Get more results to filter from (API doesn't respect filters)
+        params['limit'] = 100  # Get 100 at a time for filtering
+        
+        # NOTE: We pass filters to API but they don't work properly
+        # We'll filter manually after getting results
+        # Still pass them in case API starts working properly in future
         
         if city:
             params['city'] = city
-        
         if min_rooms is not None:
             params['number_of_rooms_min'] = min_rooms
-        
         if max_rooms is not None:
             params['number_of_rooms_max'] = max_rooms
-        
         if max_price is not None:
             params['price_display_max'] = max_price
-        
         if min_surface is not None:
             params['livingspace_min'] = min_surface
-        
         if offer_type:
             params['offer_type'] = offer_type.upper()
-        
         if object_category:
             params['object_category'] = object_category.upper()
-        
-        params['limit'] = limit
-        params['offset'] = offset
         
         try:
             logger.info(f"Searching properties with filters: {params}")
@@ -94,9 +91,31 @@ class FlatfoxClient:
             response.raise_for_status()
             
             data = response.json()
-            logger.info(f"Found {data.get('count', 0)} total properties")
             
-            return data
+            # IMPORTANT: Flatfox API doesn't filter properly, we need to filter results manually
+            # Get all results and filter them ourselves
+            all_results = data.get('results', [])
+            filtered_results = self._filter_results_manually(
+                all_results, city, min_rooms, max_rooms, max_price, 
+                min_surface, offer_type, object_category
+            )
+            
+            # Apply pagination on filtered results
+            start_idx = offset
+            end_idx = offset + limit
+            paginated_results = filtered_results[start_idx:end_idx]
+            
+            # Return modified data with correct count
+            filtered_data = {
+                'count': len(filtered_results),
+                'next': None if end_idx >= len(filtered_results) else 'has_more',
+                'previous': None if offset == 0 else 'has_prev',
+                'results': paginated_results
+            }
+            
+            logger.info(f"API returned {len(all_results)}, after filtering: {len(filtered_results)} properties")
+            
+            return filtered_data
             
         except requests.exceptions.Timeout:
             logger.error("Request to Flatfox API timed out")
@@ -109,6 +128,76 @@ class FlatfoxClient:
         except ValueError as e:
             logger.error(f"Error parsing JSON response: {e}")
             return {'count': 0, 'next': None, 'previous': None, 'results': []}
+    
+    def _filter_results_manually(self, results: list, city: Optional[str] = None,
+                                 min_rooms: Optional[float] = None, max_rooms: Optional[float] = None,
+                                 max_price: Optional[int] = None, min_surface: Optional[int] = None,
+                                 offer_type: Optional[str] = None, object_category: Optional[str] = None) -> list:
+        """
+        Filter results manually since API doesn't filter properly
+        
+        Args:
+            results: Raw results from API
+            Filters: Same as search_properties
+            
+        Returns:
+            Filtered list of results
+        """
+        filtered = []
+        
+        for item in results:
+            # Filter by city (case insensitive partial match)
+            if city:
+                item_city = item.get('city', '').lower()
+                if city.lower() not in item_city:
+                    continue
+            
+            # Filter by rooms
+            item_rooms = item.get('number_of_rooms')
+            if item_rooms is not None:
+                try:
+                    rooms_float = float(item_rooms)
+                    if min_rooms and rooms_float < min_rooms:
+                        continue
+                    if max_rooms and rooms_float > max_rooms:
+                        continue
+                except (TypeError, ValueError):
+                    pass
+            
+            # Filter by price
+            item_price = item.get('price_display')
+            if max_price and item_price:
+                try:
+                    if float(item_price) > max_price:
+                        continue
+                except (TypeError, ValueError):
+                    pass
+            
+            # Filter by surface
+            item_surface = item.get('livingspace')
+            if min_surface and item_surface:
+                try:
+                    if float(item_surface) < min_surface:
+                        continue
+                except (TypeError, ValueError):
+                    pass
+            
+            # Filter by offer type
+            if offer_type:
+                item_type = item.get('offer_type', '').upper()
+                if item_type != offer_type.upper():
+                    continue
+            
+            # Filter by category
+            if object_category:
+                item_category = item.get('object_category', '').upper()
+                if item_category != object_category.upper():
+                    continue
+            
+            # If we got here, item passes all filters
+            filtered.append(item)
+        
+        return filtered
     
     def parse_property(self, data: Dict[str, Any]) -> Optional[Property]:
         """
