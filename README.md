@@ -70,7 +70,19 @@ pip install -r requirements.txt
    TELEGRAM_BOT_TOKEN = "your_actual_bot_token_here"
    ```
 
-## 🚀 Usage
+## 🚀 Quick Start
+
+### Fast setup (5 minutes):
+
+1. **Get bot token from @BotFather on Telegram**
+2. **Install dependencies:** `pip install -r requirements.txt`
+3. **Configure:** `cp config.example.py config.py` and add your token
+4. **Run:** `python main.py`
+5. **Test on Telegram!** 🎉
+
+📖 **Detailed guide:** See `SETUP_GUIDE.md` for complete setup instructions.
+
+⚡ **Quick reference:** See `QUICK_START.md` for fast setup.
 
 ### Start the bot
 
