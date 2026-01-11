@@ -5,6 +5,17 @@ Property Category Keyboard with Multilingual Support
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 # Category translations
+# Map our internal category names to Flatfox API codes
+# Our code -> Flatfox API code
+CATEGORY_MAPPING = {
+    'APARTMENT': 'APPT',    # Flatfox uses APPT not APARTMENT
+    'HOUSE': 'HOUSE',
+    'PARK': 'PARK',
+    'INDUSTRY': 'INDUS',    # Flatfox uses INDUS not INDUSTRY
+    'SHARED': 'SHARED'
+}
+
+# Labels for display (using our internal names)
 CATEGORY_LABELS = {
     'APARTMENT': {
         'it': '🏢 Appartamento',

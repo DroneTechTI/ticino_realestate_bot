@@ -66,71 +66,47 @@ class FlatfoxClient:
         # We'll fetch multiple pages to get more results
         fetch_limit = 200  # Fetch 200 results total to filter from
         
-        # NOTE: We pass filters to API but they don't work properly
-        # We'll filter manually after getting results
-        # Still pass them in case API starts working properly in future
+        # Use correct API syntax according to documentation
+        # https://flatfox.ch/en/docs/api/#/resources/public-listing
         
         if city:
             params['city'] = city
         if min_rooms is not None:
-            params['number_of_rooms_min'] = min_rooms
+            params['number_of_rooms__gte'] = min_rooms  # Greater than or equal
         if max_rooms is not None:
-            params['number_of_rooms_max'] = max_rooms
+            params['number_of_rooms__lte'] = max_rooms  # Less than or equal
         if max_price is not None:
-            params['price_display_max'] = max_price
+            params['price_display__lte'] = max_price  # Less than or equal
         if min_surface is not None:
-            params['livingspace_min'] = min_surface
+            params['livingspace__gte'] = min_surface  # Greater than or equal
         if offer_type:
             params['offer_type'] = offer_type.upper()
         if object_category:
-            params['object_category'] = object_category.upper()
+            # Map our categories to Flatfox codes
+            category_map = {
+                'APARTMENT': 'APPT',
+                'HOUSE': 'HOUSE',
+                'PARK': 'PARK',
+                'INDUSTRY': 'INDUS',
+                'SHARED': 'SHARED'
+            }
+            flatfox_category = category_map.get(object_category.upper(), object_category.upper())
+            params['object_category'] = flatfox_category
         
         try:
-            # IMPORTANT: Flatfox API doesn't filter properly!
-            # We need to fetch multiple pages and filter manually
-            all_results = []
+            # With correct API syntax, we can let API do most filtering
+            # Just fetch one page at a time
+            params['limit'] = limit
+            params['offset'] = offset
             
-            # Fetch multiple pages to get enough data (200 results)
-            for page_offset in range(0, fetch_limit, 100):
-                params['limit'] = 100
-                params['offset'] = page_offset
-                
-                logger.info(f"Fetching page at offset {page_offset}")
-                response = self.session.get(self.api_url, params=params, timeout=10)
-                response.raise_for_status()
-                
-                data = response.json()
-                page_results = data.get('results', [])
-                all_results.extend(page_results)
-                
-                # Stop if we got less than 100 (no more results)
-                if len(page_results) < 100:
-                    break
+            logger.info(f"API request with params: {params}")
+            response = self.session.get(self.api_url, params=params, timeout=10)
+            response.raise_for_status()
             
-            logger.info(f"Fetched {len(all_results)} total results from API")
+            data = response.json()
+            logger.info(f"API returned count: {data.get('count', 0)}, results: {len(data.get('results', []))}")
             
-            # Filter results manually
-            filtered_results = self._filter_results_manually(
-                all_results, city, min_rooms, max_rooms, max_price, 
-                min_surface, offer_type, object_category
-            )
-            
-            # Apply pagination on filtered results
-            start_idx = offset
-            end_idx = offset + limit
-            paginated_results = filtered_results[start_idx:end_idx]
-            
-            # Return modified data with correct count
-            filtered_data = {
-                'count': len(filtered_results),
-                'next': None if end_idx >= len(filtered_results) else 'has_more',
-                'previous': None if offset == 0 else 'has_prev',
-                'results': paginated_results
-            }
-            
-            logger.info(f"After filtering: {len(filtered_results)} properties match criteria")
-            
-            return filtered_data
+            return data
             
         except requests.exceptions.Timeout:
             logger.error("Request to Flatfox API timed out")
