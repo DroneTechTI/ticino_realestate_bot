@@ -276,9 +276,9 @@ def city_suggestions_keyboard() -> InlineKeyboardMarkup:
         keyboard.append(row)
     
     # Option to enter custom city
-    keyboard.append([InlineKeyboardButton("✏️ Enter Other City", callback_data="city_custom")])
-    keyboard.append([InlineKeyboardButton("❌ Remove City Filter", callback_data="city_NONE")])
-    keyboard.append([InlineKeyboardButton("« Back", callback_data="back_filters")])
+    keyboard.append([InlineKeyboardButton("✏️ Altra città / Andere Stadt / Other City", callback_data="city_custom")])
+    keyboard.append([InlineKeyboardButton("❌ Rimuovi / Entfernen / Remove", callback_data="city_NONE")])
+    keyboard.append([InlineKeyboardButton("« Indietro / Zurück / Back", callback_data="back_filters")])
     
     return InlineKeyboardMarkup(keyboard)
 
@@ -302,9 +302,9 @@ def room_presets_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton("5+ rooms", callback_data="rooms_5_99")
         ],
-        [InlineKeyboardButton("✏️ Custom Range", callback_data="rooms_custom")],
-        [InlineKeyboardButton("❌ Remove Filter", callback_data="rooms_NONE")],
-        [InlineKeyboardButton("« Back", callback_data="back_filters")]
+        [InlineKeyboardButton("✏️ Personalizza / Anpassen / Custom", callback_data="rooms_custom")],
+        [InlineKeyboardButton("❌ Rimuovi / Entfernen / Remove", callback_data="rooms_NONE")],
+        [InlineKeyboardButton("« Indietro / Zurück / Back", callback_data="back_filters")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -329,9 +329,9 @@ def price_presets_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("< CHF 4'000", callback_data="price_4000"),
             InlineKeyboardButton("< CHF 5'000", callback_data="price_5000")
         ],
-        [InlineKeyboardButton("✏️ Custom Price", callback_data="price_custom")],
-        [InlineKeyboardButton("❌ Remove Filter", callback_data="price_NONE")],
-        [InlineKeyboardButton("« Back", callback_data="back_filters")]
+        [InlineKeyboardButton("✏️ Personalizza / Anpassen / Custom", callback_data="price_custom")],
+        [InlineKeyboardButton("❌ Rimuovi / Entfernen / Remove", callback_data="price_NONE")],
+        [InlineKeyboardButton("« Indietro / Zurück / Back", callback_data="back_filters")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -355,8 +355,8 @@ def surface_presets_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton("≥ 150 m²", callback_data="surface_150")
         ],
-        [InlineKeyboardButton("✏️ Custom Surface", callback_data="surface_custom")],
-        [InlineKeyboardButton("❌ Remove Filter", callback_data="surface_NONE")],
-        [InlineKeyboardButton("« Back", callback_data="back_filters")]
+        [InlineKeyboardButton("✏️ Personalizza / Anpassen / Custom", callback_data="surface_custom")],
+        [InlineKeyboardButton("❌ Rimuovi / Entfernen / Remove", callback_data="surface_NONE")],
+        [InlineKeyboardButton("« Indietro / Zurück / Back", callback_data="back_filters")]
     ]
     return InlineKeyboardMarkup(keyboard)

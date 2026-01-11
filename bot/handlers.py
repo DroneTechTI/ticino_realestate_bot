@@ -645,13 +645,15 @@ class BotHandlers:
             )
             return
         
-        # Show results header
+        # Show results header - send new message instead of editing to avoid "not modified" error
         header = get_message('search_results_header', lang,
                            count=total_count,
                            page=1,
                            total_pages=total_pages)
         
-        await query.edit_message_text(
+        # Answer callback and send new message
+        await query.answer()
+        await query.message.reply_text(
             header,
             parse_mode=ParseMode.HTML,
             reply_markup=pagination_keyboard(1, total_pages, lang)

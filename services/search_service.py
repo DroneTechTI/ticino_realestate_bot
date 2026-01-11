@@ -35,6 +35,7 @@ class SearchService:
                          max_price: Optional[int] = None,
                          min_surface: Optional[int] = None,
                          offer_type: Optional[str] = None,
+                         object_category: Optional[str] = None,
                          page: int = 1,
                          per_page: int = 5) -> Tuple[int, List[Property], int]:
         """
@@ -47,6 +48,7 @@ class SearchService:
             max_price: Maximum price
             min_surface: Minimum surface area
             offer_type: 'RENT' or 'SALE'
+            object_category: Category (APARTMENT, HOUSE, PARK, INDUSTRY, SHARED)
             page: Page number (1-indexed)
             per_page: Results per page
             
@@ -58,7 +60,7 @@ class SearchService:
         
         logger.info(f"Searching properties - Page {page}, Filters: city={city}, "
                    f"rooms={min_rooms}-{max_rooms}, price<={max_price}, "
-                   f"surface>={min_surface}, type={offer_type}")
+                   f"surface>={min_surface}, type={offer_type}, category={object_category}")
         
         # Call API
         total_count, properties = self.flatfox.search_and_parse(
@@ -68,6 +70,7 @@ class SearchService:
             max_price=max_price,
             min_surface=min_surface,
             offer_type=offer_type,
+            object_category=object_category,
             limit=per_page,
             offset=offset
         )
@@ -98,6 +101,7 @@ class SearchService:
             max_price=alert.max_price,
             min_surface=alert.min_surface,
             offer_type=alert.offer_type,
+            object_category=getattr(alert, 'object_category', None),
             page=page,
             per_page=per_page
         )
@@ -136,6 +140,7 @@ class SearchService:
             max_price=alert.max_price,
             min_surface=alert.min_surface,
             offer_type=alert.offer_type,
+            object_category=getattr(alert, 'object_category', None),
             limit=50
         )
         
@@ -199,7 +204,8 @@ class SearchService:
                           max_rooms: Optional[float] = None,
                           max_price: Optional[int] = None,
                           min_surface: Optional[int] = None,
-                          offer_type: Optional[str] = None) -> str:
+                          offer_type: Optional[str] = None,
+                          object_category: Optional[str] = None) -> str:
         """
         Generate a human-readable summary of active filters
         
@@ -232,6 +238,11 @@ class SearchService:
         
         if min_surface:
             filters.append(f"📐 Min surface: {min_surface} m²")
+        
+        if object_category:
+            from bot.category_keyboard import get_category_label
+            cat_label = get_category_label(object_category, 'en')
+            filters.append(f"🏠 Category: {cat_label}")
         
         if not filters:
             return "🔍 Searching all properties in Ticino"
