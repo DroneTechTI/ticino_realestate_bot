@@ -162,9 +162,9 @@ class FlatfoxClient:
         
         for item in results:
             # ALWAYS filter by Ticino canton first (API ignores it!)
-            item_state = item.get('state', '').upper()
-            if item_state != 'TI':
-                continue  # Skip non-Ticino properties
+            item_state = item.get('state', '')
+            if not item_state or item_state.upper() != 'TI':
+                continue  # Skip non-Ticino properties or None state
             
             # Filter by city (case insensitive partial match)
             if city:
