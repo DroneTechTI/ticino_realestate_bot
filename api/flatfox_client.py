@@ -6,8 +6,10 @@ This module handles all communication with the Flatfox public API.
 
 import logging
 import requests
+import time
 from typing import List, Optional, Dict, Any
 from urllib.parse import urlencode
+from datetime import datetime, timedelta
 
 from database.models import Property
 
@@ -15,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class FlatfoxClient:
-    """Client for interacting with Flatfox public API"""
+    """Client for interacting with Flatfox public API with intelligent caching"""
     
     def __init__(self, api_url: str):
         """
@@ -30,6 +32,12 @@ class FlatfoxClient:
             'User-Agent': 'TicinoRealEstateBot/1.0',
             'Accept': 'application/json'
         })
+        
+        # Cache for bulk fetched properties
+        self._cache = []
+        self._cache_time = None
+        self._cache_duration = timedelta(hours=1)  # Cache for 1 hour
+        self._fetch_size = 3000  # Fetch 3000 properties at once
     
     def search_properties(self,
                          city: Optional[str] = None,
@@ -94,31 +102,11 @@ class FlatfoxClient:
             params['object_category'] = flatfox_category
         
         try:
-            # Even with correct syntax, Flatfox API is broken and returns everything
-            # We MUST filter manually client-side
-            all_results = []
+            # NEW STRATEGY: Use cached bulk fetch
+            # Fetch 3000 properties once per hour and cache them
+            all_results = self._get_cached_properties()
             
-            # Fetch multiple pages (500 results total for better coverage)
-            for page_offset in range(0, 500, 100):
-                page_params = params.copy()
-                page_params['limit'] = 100
-                page_params['offset'] = page_offset
-                
-                logger.info(f"Fetching page at offset {page_offset}")
-                response = self.session.get(self.api_url, params=page_params, timeout=10)
-                response.raise_for_status()
-                
-                data = response.json()
-                page_results = data.get('results', [])
-                all_results.extend(page_results)
-                
-                # Stop if we got less than 100 (no more results)
-                if len(page_results) < 100:
-                    break
-            
-            logger.info(f"Fetched {len(all_results)} total results from API")
-            
-            # Filter results manually since API is broken
+            # Filter results manually (API doesn't filter properly)
             filtered_results = self._filter_results_manually(
                 all_results, city, min_rooms, max_rooms, max_price, 
                 min_surface, offer_type, object_category
@@ -137,7 +125,7 @@ class FlatfoxClient:
                 'results': paginated_results
             }
             
-            logger.info(f"After manual filtering: {len(filtered_results)} properties match criteria")
+            logger.info(f"Filtered {len(filtered_results)} properties from cache (page {offset//limit + 1})")
             
             return filtered_data
             
@@ -152,6 +140,70 @@ class FlatfoxClient:
         except ValueError as e:
             logger.error(f"Error parsing JSON response: {e}")
             return {'count': 0, 'next': None, 'previous': None, 'results': []}
+    
+    def _get_cached_properties(self) -> list:
+        """
+        Get properties from cache or fetch new batch
+        
+        Returns:
+            List of raw property dictionaries
+        """
+        # Check if cache is valid
+        if self._cache and self._cache_time:
+            age = datetime.now() - self._cache_time
+            if age < self._cache_duration:
+                logger.info(f"Using cached properties ({len(self._cache)} items, age: {age.seconds}s)")
+                return self._cache
+        
+        # Cache expired or doesn't exist - fetch new batch
+        logger.info(f"Cache expired or empty, fetching {self._fetch_size} properties from API...")
+        start_time = time.time()
+        
+        all_results = []
+        
+        # Fetch multiple pages to get 3000 properties
+        for page_offset in range(0, self._fetch_size, 100):
+            try:
+                params = {
+                    'limit': 100,
+                    'offset': page_offset
+                }
+                
+                if page_offset % 500 == 0:
+                    logger.info(f"  Fetching offset {page_offset}...")
+                
+                response = self.session.get(self.api_url, params=params, timeout=10)
+                response.raise_for_status()
+                
+                data = response.json()
+                page_results = data.get('results', [])
+                all_results.extend(page_results)
+                
+                # Small delay to be nice to API
+                time.sleep(0.1)
+                
+                # Stop if we got less than 100 (no more results)
+                if len(page_results) < 100:
+                    break
+                    
+            except Exception as e:
+                logger.error(f"Error fetching page at offset {page_offset}: {e}")
+                break
+        
+        elapsed = time.time() - start_time
+        
+        # Update cache
+        self._cache = all_results
+        self._cache_time = datetime.now()
+        
+        # Count Ticino properties
+        ti_count = sum(1 for item in all_results if item.get('state') == 'TI')
+        
+        logger.info(f"✓ Fetched {len(all_results)} properties in {elapsed:.1f}s")
+        logger.info(f"  Ticino properties: {ti_count} ({ti_count/len(all_results)*100:.1f}%)")
+        logger.info(f"  Cache valid for 1 hour")
+        
+        return all_results
     
     def _filter_results_manually(self, results: list, city: Optional[str] = None,
                                  min_rooms: Optional[float] = None, max_rooms: Optional[float] = None,
