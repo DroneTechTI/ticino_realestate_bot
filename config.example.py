@@ -20,6 +20,10 @@ DATABASE_NAME = "realestate_bot.db"
 CHECK_INTERVAL_MINUTES = 60  # Check for new listings every 60 minutes
 MAX_RESULTS_PER_PAGE = 5     # Number of results to show per page
 
+# API Cache Settings
+API_CACHE_HOURS = 1          # Cache properties for 1 hour
+API_BULK_FETCH_SIZE = 3000   # Fetch 3000 properties at once (gives ~60 Ticino)
+
 # Telegraph Configuration (for long descriptions)
 TELEGRAPH_AUTHOR = "Ticino Real Estate"
 TELEGRAPH_AUTHOR_URL = ""
